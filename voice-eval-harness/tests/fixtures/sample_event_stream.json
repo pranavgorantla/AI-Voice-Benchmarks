@@ -1,0 +1,22 @@
+{
+  "description": "Fixture event stream for booking-simple scenario. Two user turns, two agent turns, one tool call. All timestamps in seconds since call start.",
+  "canonical_events": [
+    { "type": "user_speech_started", "timestamp": 0.00, "payload": {} },
+    { "type": "user_speech_ended",   "timestamp": 3.20, "payload": {} },
+    { "type": "agent_speech_started","timestamp": 3.65, "payload": {} },
+    { "type": "agent_speech_ended",  "timestamp": 6.10, "payload": {} },
+    { "type": "user_speech_started", "timestamp": 6.50, "payload": {} },
+    { "type": "user_speech_ended",   "timestamp": 7.80, "payload": {} },
+    { "type": "tool_call_dispatched","timestamp": 8.15, "payload": { "name": "book_appointment", "args": { "patient_name": "Alex Chen", "appointment_datetime": "2025-01-14T14:00:00" } } },
+    { "type": "tool_call_completed", "timestamp": 8.35, "payload": { "result": "success" } },
+    { "type": "agent_speech_started","timestamp": 8.40, "payload": {} },
+    { "type": "agent_speech_ended",  "timestamp": 10.20,"payload": {} },
+    { "type": "call_ended",          "timestamp": 10.50,"payload": {} }
+  ],
+  "expected_metrics": {
+    "ttfr_measurements": [0.45, 0.35],
+    "barge_in_measurements": [],
+    "tool_call_accuracy": 1.0,
+    "turn_completion": 1.0
+  }
+}

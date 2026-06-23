@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice AI Eval Harness — Leaderboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>Voice AI Eval Harness</h1>
+  <span class="badge">v0.1 beta</span>
+  <span style="flex:1"></span>
+  <a href="https://github.com/your-org/voice-eval-harness" style="font-size:12px;color:var(--muted)">GitHub</a>
+</header>
+
+<main>
+
+  <!-- Filters -->
+  <div class="filters">
+    <select id="filter-platform"><option value="">All platforms</option></select>
+    <select id="filter-scenario"><option value="">All scenarios</option></select>
+    <button id="btn-refresh">↺ Refresh</button>
+  </div>
+
+  <!-- Leaderboard -->
+  <section>
+    <h2>Leaderboard</h2>
+    <div id="leaderboard"><div class="loading">Loading results…</div></div>
+  </section>
+
+  <!-- Charts -->
+  <section id="charts-section" style="display:none">
+    <h2>Distributions</h2>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Time-to-First-Response (ms)</h3>
+        <canvas id="chart-ttfr"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Barge-in Response Time (ms)</h3>
+        <canvas id="chart-barge"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Tool Call Accuracy (%)</h3>
+        <canvas id="chart-toolacc"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Turn Completion Rate (%)</h3>
+        <canvas id="chart-completion"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recent trials -->
+  <section>
+    <h2>Recent Trials <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:12px">— click a row to see the full event timeline</span></h2>
+    <div id="trials-list" class="trials-list"><div class="loading">Loading…</div></div>
+  </section>
+
+</main>
+
+<!-- Trial detail panel (slide-in) -->
+<div id="trial-panel"></div>
+
+<script src="leaderboard.js"></script>
+</body>
+</html>

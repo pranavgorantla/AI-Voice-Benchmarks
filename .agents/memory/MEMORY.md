@@ -1,0 +1,2 @@
+- [Voice Eval Harness path quirks](voice-eval-harness-paths.md) — SCENARIOS_DIR and audio dirs are path-computed from __file__; parents[] depth matters and differs by file location.
+- [Voice Eval Harness DATABASE_URL isolation](voice-eval-harness-db.md) — monorepo DATABASE_URL is PostgreSQL; always set sqlite explicitly for harness scripts and tests.

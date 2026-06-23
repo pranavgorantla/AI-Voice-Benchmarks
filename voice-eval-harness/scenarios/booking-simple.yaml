@@ -1,0 +1,45 @@
+id: booking-simple
+description: Cooperative user books a dental appointment with one tool call and a single confirmation turn.
+
+agent_config:
+  system_prompt: |
+    You are a receptionist at Bright Smile Dental. Your job is to book appointments.
+    Keep responses brief and professional. When the caller confirms a time, call the
+    book_appointment tool with the caller's name and the appointment datetime in
+    ISO 8601 format (e.g. 2025-01-14T14:00:00). Do not confirm the booking until the
+    caller explicitly agrees to the time you propose.
+  voice: alloy
+  model: gpt-4o
+  temperature: 0
+  tools:
+    - name: book_appointment
+      description: Book a dental appointment for a patient.
+      parameters:
+        type: object
+        properties:
+          patient_name:
+            type: string
+            description: Full name of the patient.
+          appointment_datetime:
+            type: string
+            format: date-time
+            description: ISO 8601 datetime for the appointment.
+        required: [patient_name, appointment_datetime]
+
+turns:
+  - role: user
+    audio: booking-simple-turn-1.wav
+    transcript: "Hi, I'd like to book a cleaning for next Tuesday at 2pm. My name is Alex Chen."
+    expected_response_within_ms: 1500
+  - role: user
+    audio: booking-simple-turn-2.wav
+    transcript: "Yes, that works. Thanks!"
+    expected_response_within_ms: 1500
+
+success_criteria:
+  tool_calls:
+    - name: book_appointment
+      args_match:
+        patient_name: "Alex Chen"
+        appointment_datetime_contains: "T14:00"
+  min_turns_completed: 2

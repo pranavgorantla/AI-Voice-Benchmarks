@@ -1,0 +1,26 @@
+{
+  "description": "Fixture event stream for booking-interrupted scenario. Agent is interrupted twice. Tool call uses 3pm slot after the correction.",
+  "canonical_events": [
+    { "type": "user_speech_started", "timestamp": 0.00, "payload": {} },
+    { "type": "user_speech_ended",   "timestamp": 1.20, "payload": {} },
+    { "type": "agent_speech_started","timestamp": 1.58, "payload": {} },
+    { "type": "user_speech_started", "timestamp": 2.10, "payload": {} },
+    { "type": "agent_speech_ended",  "timestamp": 2.30, "payload": {} },
+    { "type": "user_speech_ended",   "timestamp": 4.80, "payload": {} },
+    { "type": "agent_speech_started","timestamp": 5.15, "payload": {} },
+    { "type": "user_speech_started", "timestamp": 5.90, "payload": {} },
+    { "type": "agent_speech_ended",  "timestamp": 6.10, "payload": {} },
+    { "type": "user_speech_ended",   "timestamp": 7.50, "payload": {} },
+    { "type": "tool_call_dispatched","timestamp": 7.85, "payload": { "name": "book_appointment", "args": { "patient_name": "Alex Chen", "appointment_datetime": "2025-01-14T15:00:00" } } },
+    { "type": "tool_call_completed", "timestamp": 8.05, "payload": { "result": "success" } },
+    { "type": "agent_speech_started","timestamp": 8.10, "payload": {} },
+    { "type": "agent_speech_ended",  "timestamp": 9.80, "payload": {} },
+    { "type": "call_ended",          "timestamp": 10.20,"payload": {} }
+  ],
+  "expected_metrics": {
+    "ttfr_measurements": [0.38, 0.35, 0.35],
+    "barge_in_measurements": [0.20, 0.20],
+    "tool_call_accuracy": 1.0,
+    "turn_completion": 1.0
+  }
+}

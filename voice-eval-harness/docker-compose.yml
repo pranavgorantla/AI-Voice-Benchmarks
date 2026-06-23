@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  harness:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist the results DB across container restarts
+      - ./results.db:/app/results.db
+      # Mount scenarios/audio so you can update fixtures without rebuilding
+      - ./scenarios/audio:/app/scenarios/audio:ro
+    environment:
+      - PORT=8000
+      - DATABASE_URL=sqlite:////app/results.db
+      # Set these in a .env file or pass via `docker compose run -e`
+      - VAPI_API_KEY=${VAPI_API_KEY:-}
+      - RETELL_API_KEY=${RETELL_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - HARNESS_PUBLIC_URL=${HARNESS_PUBLIC_URL:-}
+      - TRIALS=${TRIALS:-10}
+      - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-10}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/results')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
