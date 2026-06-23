@@ -1,0 +1,228 @@
+# Replit Prompt: Voice AI Eval Harness — Beta MVP
+
+## What you're building
+
+An open-source benchmarking harness for production voice AI agent platforms (Vapi, Retell, ElevenLabs Agents, OpenAI Realtime). The MVP measures **end-of-turn latency**, **time-to-first-response**, **barge-in response time**, and **tool-call accuracy** across platforms running identical scenarios.
+
+There is currently no credible public benchmark in this space. Every vendor claims sub-500ms latency and "human-like" interruption handling, with no reproducible methodology to verify. This project is the methodology and reference implementation.
+
+**The contribution is methodology, not code volume.** A small harness with a rigorous methodology doc beats a large harness with hand-wavy measurement. Treat the `methodology.md` file as the most important deliverable, not an afterthought.
+
+## V1 scope — what's in
+
+- **Platforms:** Vapi and Retell only. Adapter pattern designed so additional platforms (ElevenLabs, OpenAI Realtime, LiveKit) can be added cleanly post-MVP.
+- **Scenarios:** 2 fixed scenarios, both centered on a fictional dental office appointment booking task:
+  - `booking-simple`: cooperative user, one tool call (`book_appointment`), single turn pair to confirm
+  - `booking-interrupted`: same task, but the user interrupts the agent twice mid-response and changes the appointment time once before confirming
+- **Metrics (v1 = platform-reported events, not ground-truth):**
+  - Time-to-first-response: from platform-reported `user_speech_ended` event to platform-reported `agent_speech_started` event
+  - Barge-in response: from `user_speech_started` (during agent turn) to `agent_speech_ended`
+  - Tool-call accuracy: exact match against canonical schema (`name`, `args` dict), evaluated per scenario
+  - Turn-completion rate: did the scenario reach the success state (tool call + confirmation)?
+- **Trials per scenario per platform:** 10 (configurable)
+- **Results:** SQLite database + a static-rendered leaderboard page with per-metric median and p95, distribution plots, and per-trial detail drill-down
+- **Repro:** Dockerfile, pinned dependency versions, fully committed scenario definitions, recorded synthetic user audio committed to the repo
+
+## V1 scope — what's explicitly out (do NOT build these)
+
+- SIP/RTP transport layer (vendors handle their own telephony in v1)
+- Ground-truth VAD on captured audio (use platform-reported events for v1; doc the limitation)
+- Forced alignment for "first content word" (planned for v2)
+- Audio quality metrics (subjective, needs human raters)
+- Cost-per-call normalization (hard to do fairly in v1)
+- Load testing / concurrency benchmarks
+- A real frontend framework beyond a single static HTML page reading JSON
+
+If you're tempted to add anything in the "out" list, stop and re-read the scope.
+
+## Tech stack
+
+- **Language:** Python 3.11+
+- **Web framework:** FastAPI (serves leaderboard JSON + static frontend)
+- **Storage:** SQLite via SQLAlchemy; one results table, one trials table
+- **Test runner:** plain async Python with `httpx` for platform API calls and webhook simulation
+- **Adapter pattern:** abstract base class `PlatformAdapter` with concrete subclasses `VapiAdapter`, `RetellAdapter`
+- **Frontend:** single static `index.html` with vanilla JS + Chart.js (CDN) reading from `/api/results` — no React, no build step
+- **Config:** YAML for scenario definitions and platform credentials (credentials via env vars, loaded by `pydantic-settings`)
+- **Synthetic user audio:** pre-recorded WAV files committed to `scenarios/audio/`. For the MVP, generate these via OpenAI TTS once and check them in — they need to be deterministic across runs.
+
+## File structure
+
+```
+voice-eval-harness/
+├── README.md                    # See "README requirements" section
+├── methodology.md               # See "Methodology doc requirements"
+├── ROADMAP.md                   # v1.5 and v2 plans
+├── LICENSE                      # MIT
+├── Dockerfile
+├── docker-compose.yml
+├── pyproject.toml
+├── .env.example
+├── scenarios/
+│   ├── booking-simple.yaml
+│   ├── booking-interrupted.yaml
+│   └── audio/
+│       ├── booking-simple-turn-1.wav
+│       └── ...
+├── src/
+│   ├── harness/
+│   │   ├── __init__.py
+│   │   ├── runner.py            # Test runner orchestrator
+│   │   ├── adapters/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py          # PlatformAdapter ABC
+│   │   │   ├── vapi.py
+│   │   │   └── retell.py
+│   │   ├── scenarios.py         # Scenario loader + validator
+│   │   ├── metrics.py           # Metric computation from event streams
+│   │   └── storage.py           # SQLAlchemy models + DB session
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── main.py              # FastAPI app
+│   │   └── routes.py            # /api/results, /api/trials/{id}
+│   └── frontend/
+│       ├── index.html
+│       ├── leaderboard.js
+│       └── style.css
+├── tests/
+│   ├── test_metrics.py          # Pure-function metric tests (no API calls)
+│   ├── test_scenarios.py        # Schema validation
+│   └── fixtures/
+│       └── sample_event_stream.json
+└── scripts/
+    ├── run_benchmark.py         # CLI entry: `python -m scripts.run_benchmark --platform vapi`
+    ├── seed_audio.py            # Regenerate synthetic user audio
+    └── export_results.py        # Dump current leaderboard to /docs for static hosting
+```
+
+## Adapter interface
+
+```python
+class PlatformAdapter(ABC):
+    name: str  # "vapi" | "retell" | ...
+
+    @abstractmethod
+    async def setup_agent(self, scenario: Scenario) -> AgentHandle:
+        """Create or configure the test agent on the platform for this scenario."""
+
+    @abstractmethod
+    async def run_trial(self, handle: AgentHandle, scenario: Scenario) -> TrialResult:
+        """Execute a single trial: place the call, play synthetic user audio at the
+        scripted points, capture the platform's event stream, return raw events."""
+
+    @abstractmethod
+    async def teardown_agent(self, handle: AgentHandle) -> None:
+        """Clean up any resources created on the platform."""
+
+    @abstractmethod
+    def normalize_events(self, raw_events: list[dict]) -> list[CanonicalEvent]:
+        """Translate platform-specific event payloads to the canonical schema."""
+```
+
+Canonical events: `user_speech_started`, `user_speech_ended`, `agent_speech_started`, `agent_speech_ended`, `tool_call_dispatched`, `tool_call_completed`, `call_ended`. Each has a timestamp (float seconds, monotonic since call start) and a payload dict.
+
+The `normalize_events` method is where most platform-specific complexity lives. Document the translation rules per platform in a comment block at the top of each adapter file.
+
+## Scenario schema
+
+```yaml
+id: booking-simple
+description: Cooperative user books a dental appointment with one tool call.
+agent_config:
+  system_prompt: |
+    You are a receptionist at Bright Smile Dental. Your job is to book
+    appointments. When the caller confirms a time, call the `book_appointment`
+    tool with the caller's name and the appointment datetime.
+  voice: alloy
+  model: gpt-4o
+  tools:
+    - name: book_appointment
+      description: Book a dental appointment.
+      parameters:
+        type: object
+        properties:
+          patient_name: { type: string }
+          appointment_datetime: { type: string, format: date-time }
+        required: [patient_name, appointment_datetime]
+turns:
+  - role: user
+    audio: booking-simple-turn-1.wav
+    transcript: "Hi, I'd like to book a cleaning for next Tuesday at 2pm. My name is Alex Chen."
+    expected_response_within_ms: 1500
+  - role: user
+    audio: booking-simple-turn-2.wav
+    transcript: "Yes, that works. Thanks!"
+    expected_response_within_ms: 1500
+success_criteria:
+  tool_calls:
+    - name: book_appointment
+      args_match:
+        patient_name: "Alex Chen"
+        appointment_datetime_contains: "T14:00"  # flexible date match
+  min_turns_completed: 2
+```
+
+## README requirements
+
+The README is your most important marketing asset. It should land in under 60 seconds for a senior engineer skimming GitHub. Structure:
+
+1. **One-sentence pitch** (above the fold, before any badges or fluff)
+2. **The headline finding** — a single chart or stat that makes someone curious. Even with no data yet, show a mock with `[example data]` labeled clearly.
+3. **Why this exists** (3–5 sentences max). The vendor-claim-credibility gap.
+4. **What it measures** (bullet list of metrics, one line each)
+5. **What it doesn't measure yet** (be explicit; this builds trust)
+6. **Current leaderboard** (table, auto-generated from results DB on each release)
+7. **How to reproduce** (3–5 command blocks, must actually work from a clean clone)
+8. **Methodology** (link to `methodology.md`, two-sentence summary)
+9. **Roadmap** (link to `ROADMAP.md`, three bullets max)
+10. **How to add a platform** (link to a guide; show that contribution path is welcoming)
+11. **Citation block** (BibTeX-style; this signals "you can cite this in a paper or blog")
+
+Tone: confident, technical, no marketing fluff. No emojis except in section headers if used at all. The README should read like a Stripe doc, not a startup landing page.
+
+## Methodology doc requirements
+
+`methodology.md` is the credibility document. If a vendor wants to push back on your numbers, they should be pushing back on the methodology doc — and the doc should already have addressed their objection.
+
+Sections required:
+
+1. **What we measure and why.** For each metric, define it precisely (which event delta, what units, how aggregated).
+2. **What we don't measure in v1.** Honest list: ground-truth VAD, forced alignment, audio quality, cost, etc. Each with a one-line "why not yet."
+3. **Event-stream methodology.** Explicit: v1 uses platform-reported events. Document the trust assumption ("we treat each vendor's `user_speech_ended` as ground truth for v1") and the limitation ("vendors with more aggressive VAD will appear faster — this is a known v1 limitation, addressed in v2 by ground-truth VAD on captured audio").
+4. **Per-platform translation table.** For each platform, show which platform-native events map to canonical events. This is where vendor disputes will start; pre-empt them with citations to vendor docs.
+5. **Statistical methodology.** N=10 trials per scenario per platform. Report median and p95, not mean. Show full distributions in the per-trial detail view. Justify N=10 as a v1 trade-off; commit to N=50 for any "official" leaderboard publication.
+6. **Configuration choices per platform.** Exact model, voice, temperature, etc. used per platform, with a one-line justification ("vendor's documented recommended default for booking use case").
+7. **Reproducibility checklist.** Pinned versions, committed audio, deterministic seeds where possible. Acknowledge non-determinism in LLM outputs and document mitigation (multiple trials, robust success criteria).
+8. **Known confounders.** Network latency between Replit and vendor APIs, time-of-day load on vendor infrastructure, regional differences. Document them honestly.
+9. **How to contest a result.** A specific process: open an issue with config, expected behavior, observed behavior; maintainer commits to a re-run within 7 days.
+
+## Success criteria for the MVP
+
+The build is done when:
+
+1. `docker compose up` from a clean clone produces a working FastAPI server with the leaderboard at `localhost:8000` and seeded sample data
+2. `python -m scripts.run_benchmark --platform vapi --scenario booking-simple --trials 3` runs end-to-end against the real Vapi API and stores results
+3. Same as #2 for Retell
+4. The leaderboard page renders median + p95 for all 4 metrics, both scenarios, both platforms, with a working drill-down to per-trial event timelines
+5. `pytest` passes; tests cover metric computation logic with fixture event streams (no live API calls in test suite)
+6. README, methodology.md, and ROADMAP.md are complete and link correctly
+7. A 90-second screen recording (committed as `demo.mp4` or linked from README) shows the harness running one trial and the result appearing on the leaderboard
+
+## What I want you to ask me before starting
+
+Before generating code, surface these decisions back to me with your recommendation for each:
+
+1. **Adapter abstraction depth.** Should `normalize_events` operate on raw webhook payloads (push model) or polled API responses (pull model)? Vapi and Retell differ here.
+2. **Audio playback timing.** Do we trigger synthetic user audio playback based on (a) platform-reported `agent_speech_ended` events, (b) a fixed schedule, or (c) silence detection on the agent's audio stream? Each has trade-offs. v1 should pick one and document.
+3. **Database choice.** SQLite for sure for local dev, but should the leaderboard production deploy use Postgres (Neon free tier on Replit) for concurrent reads? Lean toward yes.
+4. **How to handle vendor rate limits.** Built-in backoff + a `--rate-limit-rpm` flag, or assume the operator handles this? Lean toward built-in.
+
+Make a recommendation for each, then wait for my confirmation before scaffolding the project.
+
+## Anti-goals (worth restating)
+
+- Do not add features beyond V1 scope, even if "it would be easy."
+- Do not optimize for being clever. Optimize for being correct and well-documented.
+- Do not skip the methodology doc. It is the most important file in the repo.
+- Do not write a marketing-style README. Write a Stripe-docs-style README.
+- Do not silently make methodology choices. Document every trade-off in `methodology.md`.
