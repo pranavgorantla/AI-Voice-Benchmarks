@@ -26,6 +26,17 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+.nav-tab {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: color .15s, background .15s;
+}
+.nav-tab:hover { color: var(--text); background: var(--surface); text-decoration: none; }
+.nav-tab.active { color: var(--text); background: var(--surface); }
+
 /* ── Layout ────────────────────────────────────────────────────────────────── */
 
 header {

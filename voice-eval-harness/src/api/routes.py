@@ -6,6 +6,7 @@ Endpoints:
   GET  /api/results/{platform}/{scenario_id}
                                    — single (platform, scenario) summary
   GET  /api/trials/{trial_id}      — per-trial detail with full event timeline
+  GET  /api/docs/{name}            — serve raw markdown for README / methodology
   POST /webhooks/vapi/{trial_id}   — Vapi webhook receiver
   POST /webhooks/retell/{trial_id} — Retell webhook receiver
 """
@@ -14,16 +15,35 @@ from __future__ import annotations
 
 import json
 import logging
+import pathlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
+
+REPO_ROOT = pathlib.Path(__file__).parents[2]   # src/api/ → src/ → voice-eval-harness/
+DOCS_FILES = {
+    "readme": REPO_ROOT / "README.md",
+    "methodology": REPO_ROOT / "methodology.md",
+    "roadmap": REPO_ROOT / "ROADMAP.md",
+}
 
 from ..harness.storage import ScenarioResult, TrialResult, get_db
 from ..harness.webhook_store import WebhookStore
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# ── Docs endpoints ────────────────────────────────────────────────────────────
+
+@router.get("/api/docs/{name}")
+def get_doc(name: str) -> Response:
+    """Serve raw markdown text for README, methodology, or roadmap."""
+    path = DOCS_FILES.get(name.lower())
+    if path is None or not path.exists():
+        raise HTTPException(status_code=404, detail=f"Doc {name!r} not found. Valid names: {list(DOCS_FILES)}")
+    return Response(content=path.read_text(), media_type="text/plain; charset=utf-8")
 
 
 # ── Leaderboard endpoints ─────────────────────────────────────────────────────
