@@ -21,11 +21,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-REPO_ROOT = pathlib.Path(__file__).parents[2]   # src/api/ → src/ → voice-eval-harness/
+_HARNESS_ROOT = pathlib.Path(__file__).parents[2]   # src/api/ → src/ → voice-eval-harness/
+_REPO_ROOT = _HARNESS_ROOT.parent                   # workspace root (where README lives on GitHub)
 DOCS_FILES = {
-    "readme": REPO_ROOT / "README.md",
-    "methodology": REPO_ROOT / "methodology.md",
-    "roadmap": REPO_ROOT / "ROADMAP.md",
+    "readme": _REPO_ROOT / "README.md",
+    "methodology": _HARNESS_ROOT / "methodology.md",
+    "roadmap": _HARNESS_ROOT / "ROADMAP.md",
 }
 
 from ..harness.storage import ScenarioResult, TrialResult, get_db
